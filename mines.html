@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mines Pro - Financial Edition</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --bg: var(--tg-theme-bg-color, #0f0f14);
+            --sec-bg: var(--tg-theme-secondary-bg-color, #1b1f3a);
+            --text: var(--tg-theme-text-color, #ffffff);
+            --btn: var(--tg-theme-button-color, #5e8fff);
+            --hint: var(--tg-theme-hint-color, #708499);
+            --danger: #ff4d4d;
+            --success: #2ecc71;
+        }
+
+        body {
+            font-family: -apple-system, system-ui, sans-serif;
+            margin: 0; background-color: var(--bg); color: var(--text);
+            display: flex; flex-direction: column; align-items: center;
+            min-height: 100vh; padding: 20px; box-sizing: border-box;
+            user-select: none; -webkit-tap-highlight-color: transparent;
+        }
+
+        .balance-card {
+            background: var(--sec-bg); padding: 12px 30px; border-radius: 20px;
+            font-size: 24px; font-weight: 900; margin-bottom: 25px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.08);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .grid {
+            display: grid; grid-template-columns: repeat(4, 1fr);
+            gap: 10px; width: 100%; max-width: 340px; margin-bottom: 25px;
+        }
+
+        .cell {
+            aspect-ratio: 1; background: var(--sec-bg); border-radius: 14px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 24px; cursor: pointer; transition: transform 0.1s;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .cell:active { transform: scale(0.92); }
+        .cell.open { cursor: default; transform: none; }
+        .cell.gem { background: rgba(46, 204, 113, 0.2); border-color: var(--success); color: var(--success); }
+        .cell.mine { background: rgba(255, 77, 77, 0.2); border-color: var(--danger); color: var(--danger); }
+
+        .panel { width: 100%; max-width: 340px; display: flex; flex-direction: column; gap: 15px; }
+        .input-group { display: flex; flex-direction: column; gap: 6px; }
+        .label { font-size: 11px; color: var(--hint); text-transform: uppercase; font-weight: bold; padding-left: 5px; }
+        
+        input, select {
+            background: var(--sec-bg); border: 2px solid var(--btn); color: white;
+            padding: 14px; border-radius: 16px; font-size: 18px; outline: none;
+        }
+
+        .btn {
+            padding: 18px; border-radius: 18px; border: none;
+            background: var(--btn); color: white; font-weight: bold;
+            text-transform: uppercase; font-size: 16px; cursor: pointer;
+        }
+        .btn:disabled { opacity: 0.5; }
+        #cashoutBtn { background: var(--success); display: none; }
+
+        .info { text-align: center; margin-bottom: 15px; font-weight: bold; height: 30px; font-size: 18px; }
+        .current-x { color: var(--btn); font-size: 24px; }
+    </style>
+</head>
+<body>
+
+    <div class="balance-card"><span id="bal-val">0.00</span> 💰</div>
+
+    <div class="info" id="status">Начните игру</div>
+
+    <div id="grid" class="grid"></div>
+
+    <div class="panel">
+        <div class="input-group">
+            <span class="label">Ставка</span>
+            <input type="number" id="betInp" value="10.00" min="0.01" step="0.01" inputmode="decimal">
+        </div>
+        <div class="input-group">
+            <span class="label">Мины</span>
+            <select id="mineSelect">
+                <option value="3" selected>3 мины</option>
+                <option value="5">5 мин</option>
+                <option value="7">7 мин</option>
+                <option value="10">10 мин</option>
+                <option value="13">13 мин</option>
+            </select>
+        </div>
+        <button class="btn" id="startBtn" onclick="startGame()">Играть</button>
+        <button class="btn" id="cashoutBtn" onclick="cashout()">Забрать <span id="winAmount">0.00</span></button>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        
+        // Системная кнопка "Назад"
+        const backBtn = tg.BackButton;
+
+        let balance = parseFloat(localStorage.getItem("casino_balance")) || 1000.00;
+        let sessionProfit = parseFloat(localStorage.getItem("session_profit")) || 0.00;
+        let gameActive = false;
+        let currentBet = 0;
+        let currentMines = 0;
+        let gemsFound = 0;
+        let minePositions = [];
+        let openedCells = [];
+
+        function updateUI() {
+            document.getElementById('bal-val').textContent = balance.toFixed(2);
+            localStorage.setItem("casino_balance", balance.toFixed(2));
+            localStorage.setItem("session_profit", sessionProfit.toFixed(2));
+
+            // Управление кнопкой назад и защитой от закрытия
+            if (gameActive) {
+                backBtn.hide(); // Убираем кнопку во время игры
+                tg.enableClosingConfirmation(); // Предупреждаем при попытке закрыть крестиком
+            } else {
+                backBtn.show(); // Показываем после игры
+                tg.disableClosingConfirmation(); 
+            }
+        }
+
+        backBtn.onClick(() => {
+            if (!gameActive) window.location.href = 'index.html';
+        });
+
+        updateUI();
+
+        function getMultiplier(mines, found) {
+            const total = 16;
+            let mult = 1;
+            for (let i = 0; i < found; i++) {
+                mult *= (total - i) / (total - mines - i);
+            }
+            return (mult * 0.88).toFixed(2);
+        }
+
+        function createGrid() {
+            const grid = document.getElementById('grid');
+            grid.innerHTML = '';
+            for (let i = 0; i < 16; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.dataset.index = i;
+                cell.onclick = () => openCell(i);
+                grid.appendChild(cell);
+            }
+        }
+        createGrid();
+
+        function startGame() {
+            currentBet = parseFloat(document.getElementById('betInp').value);
+            currentMines = parseInt(document.getElementById('mineSelect').value);
+
+            if (isNaN(currentBet) || currentBet > balance || currentBet <= 0) {
+                tg.showAlert("Недостаточно средств или неверная ставка!");
+                return;
+            }
+
+            balance -= currentBet;
+            sessionProfit -= currentBet;
+            gameActive = true;
+            gemsFound = 0;
+            openedCells = [];
+            
+            updateUI(); // Здесь спрячется кнопка Назад
+
+            minePositions = [];
+            while (minePositions.length < currentMines) {
+                let r = Math.floor(Math.random() * 16);
+                if (!minePositions.includes(r)) minePositions.push(r);
+            }
+
+            document.getElementById('startBtn').style.display = 'none';
+            document.getElementById('cashoutBtn').style.display = 'block';
+            document.getElementById('mineSelect').disabled = true;
+            document.getElementById('betInp').disabled = true;
+            document.getElementById('status').innerHTML = 'Найдите 💎';
+            createGrid();
+            tg.HapticFeedback.impactOccurred('medium');
+        }
+
+        function openCell(idx) {
+            if (!gameActive || openedCells.includes(idx)) return;
+
+            let isMine = minePositions.includes(idx);
+            
+            // Защита первого хода
+            if (gemsFound === 0 && currentBet < (balance + currentBet) * 0.7) {
+                if (isMine) {
+                    let empty = Array.from({length: 16}, (_, i) => i).filter(i => i !== idx);
+                    minePositions = minePositions.filter(p => p !== idx);
+                    minePositions.push(empty[Math.floor(Math.random() * empty.length)]);
+                    isMine = false;
+                }
+            }
+
+            // Логика слива
+            if (sessionProfit > 20.00 || gemsFound >= 3) {
+                let cheatChance = (sessionProfit > 50.00) ? 0.85 : 0.45;
+                if (!isMine && Math.random() < cheatChance) {
+                    isMine = true;
+                    minePositions.pop();
+                    minePositions.push(idx);
+                }
+            }
+
+            const cell = document.querySelector(`.cell[data-index="${idx}"]`);
+            openedCells.push(idx);
+
+            if (isMine) {
+                gameOver(false);
+            } else {
+                gemsFound++;
+                cell.innerHTML = '💎';
+                cell.classList.add('open', 'gem');
+                tg.HapticFeedback.impactOccurred('light');
+                
+                let m = getMultiplier(currentMines, gemsFound);
+                let currentWin = (currentBet * m);
+                document.getElementById('winAmount').textContent = currentWin.toFixed(2);
+                document.getElementById('status').innerHTML = `X: <span class="current-x">${m}</span>`;
+            }
+        }
+
+        function cashout() {
+            if (!gameActive || gemsFound === 0) return;
+            let m = getMultiplier(currentMines, gemsFound);
+            let win = (currentBet * m);
+            balance += win;
+            sessionProfit += (win - currentBet);
+            tg.HapticFeedback.notificationOccurred('success');
+            gameOver(true, win);
+        }
+
+        function gameOver(isWin, amount = 0) {
+            gameActive = false;
+            document.getElementById('cashoutBtn').style.display = 'none';
+
+            minePositions.forEach(pos => {
+                const cell = document.querySelector(`.cell[data-index="${pos}"]`);
+                if (!cell.classList.contains('gem')) {
+                    cell.innerHTML = '💣';
+                    cell.classList.add('mine');
+                }
+            });
+
+            document.getElementById('status').innerHTML = isWin ? 
+                `<span style="color:var(--success)">+${amount.toFixed(2)} 💰</span>` : 
+                `<span style="color:var(--danger)">ВЗРЫВ!</span>`;
+
+            setTimeout(() => {
+                const startBtn = document.getElementById('startBtn');
+                startBtn.style.display = 'block';
+                startBtn.innerText = 'ИГРАТЬ ЗАНОВО';
+                document.getElementById('mineSelect').disabled = false;
+                document.getElementById('betInp').disabled = false;
+                updateUI(); // Здесь снова появится кнопка Назад
+            }, 1500);
+        }
+    </script>
+</body>
+</html>

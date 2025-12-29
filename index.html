@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tunnel Bot Casino</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --bg: var(--tg-theme-bg-color, #0f0f14);
+            --sec-bg: var(--tg-theme-secondary-bg-color, #1b1f3a);
+            --text: var(--tg-theme-text-color, #ffffff);
+            --btn: var(--tg-theme-button-color, #5e8fff);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            margin: 0; padding: 0;
+            background-color: var(--bg); color: var(--text);
+            overflow: hidden; user-select: none;
+        }
+
+        .container { padding: 20px; text-align: center; }
+
+        .profile {
+            display: flex; align-items: center; justify-content: center;
+            gap: 12px; margin-bottom: 25px;
+        }
+
+        .profile img {
+            width: 55px; height: 55px; border-radius: 50%;
+            border: 2px solid var(--btn); object-fit: cover;
+        }
+
+        .profile-name { font-weight: bold; font-size: 20px; }
+
+        .balance {
+            background: var(--sec-bg); padding: 15px; border-radius: 15px;
+            display: flex; align-items: center; justify-content: center;
+            gap: 15px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            cursor: pointer;
+        }
+
+        .balance span {
+            font-size: 22px; font-weight: 800;
+            font-variant-numeric: tabular-nums;
+            color: #2ecc71;
+        }
+
+        .games {
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;
+        }
+
+        .game-btn {
+            background-color: var(--sec-bg); border-radius: 20px;
+            padding: 25px; font-size: 45px; border: 1px solid rgba(255,255,255,0.05);
+            cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 10px;
+        }
+
+        .game-btn span { font-size: 14px; font-weight: bold; text-transform: uppercase; opacity: 0.8; }
+
+        /* МОДАЛКА КОШЕЛЬКА */
+        .modal {
+            display: none; position: fixed; bottom: 0; left: 0; width: 100%;
+            background: var(--sec-bg); border-radius: 25px 25px 0 0;
+            padding: 25px; box-sizing: border-box; z-index: 100;
+            box-shadow: 0 -5px 20px rgba(0,0,0,0.5);
+            animation: slideUp 0.3s ease-out;
+        }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        
+        input {
+            width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px; padding: 15px; color: white; font-size: 18px;
+            margin: 15px 0; outline: none; box-sizing: border-box;
+        }
+
+        .w-btn {
+            width: 100%; padding: 15px; border-radius: 15px; border: none;
+            font-weight: bold; color: white; cursor: pointer; background: #28a745;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="profile">
+        <img id="user-photo" src="https://via.placeholder.com/50" alt="Avatar">
+        <div id="user-name" class="profile-name">Загрузка...</div>
+    </div>
+
+    <div class="balance" onclick="openWallet()">
+        <span id="balance-val">0.00</span> 💰
+    </div>
+
+    <div class="games">
+        <div class="game-btn">💣 <span>Mines</span></div>
+        <div class="game-btn">🎲 <span>Dice</span></div>
+    </div>
+</div>
+
+<div id="walletModal" class="modal">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h3 style="margin:0;">Пополнение баланса</h3>
+        <span onclick="closeWallet()" style="cursor:pointer; font-size:24px;">✕</span>
+    </div>
+    <input type="number" id="deposit-amount" value="5" min="5">
+    <button class="w-btn" onclick="startDeposit()">ОПЛАТИТЬ ЧЕРЕЗ CRYPTO PAY</button>
+</div>
+
+<script>
+    const tg = window.Telegram.WebApp;
+    const NGROK_URL = 'https://petrificant-phung-elliptically.ngrok-free.dev';
+    const userId = tg.initDataUnsafe?.user?.id || 12345; // Тестовый ID если запуск не в ТГ
+    
+    let checkInterval;
+
+    tg.ready();
+    tg.expand();
+
+    // 1. Установка данных профиля
+    if (tg.initDataUnsafe?.user) {
+        const user = tg.initDataUnsafe.user;
+        document.getElementById('user-name').textContent = user.first_name;
+        if (user.photo_url) document.getElementById('user-photo').src = user.photo_url;
+    }
+
+    // 2. Функция получения баланса из Базы Данных
+    async function updateBalance() {
+        try {
+            const res = await fetch(`${NGROK_URL}/get-balance/${userId}`);
+            const data = await res.json();
+            document.getElementById('balance-val').textContent = data.balance.toFixed(2);
+        } catch (e) { console.error("Ошибка обновления баланса"); }
+    }
+
+    function openWallet() { document.getElementById('walletModal').style.display = 'block'; }
+    function closeWallet() { document.getElementById('walletModal').style.display = 'none'; }
+
+    // 3. Создание счета и запуск проверки
+    async function startDeposit() {
+        const amount = document.getElementById('deposit-amount').value;
+        if (amount < 5) return tg.showAlert("Минимум 5 USDT");
+
+        tg.MainButton.setText("ОЖИДАЕМ ОПЛАТУ...").show();
+        
+        try {
+            const res = await fetch(`${NGROK_URL}/create-deposit`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ amount: amount, tgId: userId })
+            });
+            const data = await res.json();
+
+            if (data.pay_url) {
+                tg.openTelegramLink(data.pay_url);
+                
+                // Проверяем оплату каждые 3 сек
+                if (checkInterval) clearInterval(checkInterval);
+                checkInterval = setInterval(() => checkStatus(data.invoice_id), 3000);
+            }
+        } catch (e) { tg.showAlert("Ошибка связи!"); }
+    }
+
+    // 4. Проверка статуса в базе
+    async function checkStatus(invoiceId) {
+        try {
+            const res = await fetch(`${NGROK_URL}/check-payment/${invoiceId}/${userId}`);
+            const data = await res.json();
+
+            if (data.status === 'paid') {
+                clearInterval(checkInterval);
+                tg.MainButton.hide();
+                tg.showAlert(`✅ Начислено ${amount} USDT!`);
+                updateBalance();
+                closeWallet();
+            }
+        } catch (e) { console.error("Ошибка проверки"); }
+    }
+
+    // При загрузке сразу берем баланс из БД
+    updateBalance();
+</script>
+</body>
+</html>

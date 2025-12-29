@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Crash - Fixed</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --bg: var(--tg-theme-bg-color, #0f0f14);
+            --sec-bg: var(--tg-theme-secondary-bg-color, #1b1f3a);
+            --text: var(--tg-theme-text-color, #ffffff);
+            --btn: var(--tg-theme-button-color, #5e8fff);
+            --hint: var(--tg-theme-hint-color, #708499);
+            --success: #2ecc71;
+            --danger: #ff4d4d;
+        }
+
+        body {
+            font-family: -apple-system, sans-serif;
+            margin: 0; background-color: var(--bg); color: var(--text);
+            display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+        }
+
+        .game-header {
+            flex: 1; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; position: relative;
+        }
+
+        .balance-card {
+            background: var(--sec-bg); padding: 10px 25px; border-radius: 15px;
+            font-size: 20px; font-weight: 800; margin-top: 15px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        #multiplier { font-size: 60px; font-weight: 900; margin: 15px 0; transition: color 0.3s; }
+        #timer-display { color: var(--btn); font-weight: bold; font-size: 18px; height: 20px; }
+
+        .bets-list {
+            height: 150px; background: rgba(0,0,0,0.1);
+            overflow-y: hidden; border-top: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .bet-row {
+            display: flex; justify-content: space-between; padding: 8px 20px;
+            font-size: 13px; border-bottom: 1px solid rgba(255,255,255,0.02);
+        }
+        .bet-row.win { color: var(--success); background: rgba(46, 204, 113, 0.1); }
+        .bet-row.loss { opacity: 0.4; color: var(--danger); }
+
+        .panel {
+            background: var(--sec-bg); padding: 20px;
+            border-radius: 24px 24px 0 0; display: flex; flex-direction: column; gap: 10px;
+        }
+
+        .label { font-size: 11px; color: var(--hint); text-transform: uppercase; font-weight: bold; }
+        input {
+            background: var(--bg); border: 2px solid var(--btn); color: white;
+            padding: 12px; border-radius: 12px; font-size: 16px; outline: none;
+        }
+
+        .main-btn {
+            padding: 16px; border-radius: 14px; border: none;
+            background: var(--btn); color: white; font-weight: bold;
+            text-transform: uppercase; font-size: 15px; cursor: pointer;
+        }
+        .main-btn.cashout { background: var(--success); }
+        .main-btn:disabled { opacity: 0.5; }
+
+        #rocket {
+            position: absolute; font-size: 45px; bottom: 20%; left: 10%;
+            transition: transform 0.1s linear; display: none; z-index: 5;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="game-header">
+        <div class="balance-card"><span id="bal-val">0.00</span> 💰</div>
+        <div id="timer-display">Загрузка...</div>
+        <div id="multiplier">1.00x</div>
+        <div id="rocket">🚀</div>
+    </div>
+
+    <div class="bets-list" id="betsCont"></div>
+
+    <div class="panel">
+        <div style="display:flex; flex-direction:column; gap:4px;">
+            <span class="label">Ваша ставка</span>
+            <input type="number" id="betInp" value="10.00" step="1">
+        </div>
+        <button id="actionBtn" class="main-btn" onclick="handleBtn()">Поставить</button>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+        
+        const backBtn = tg.BackButton;
+
+        let balance = parseFloat(localStorage.getItem("casino_balance")) || 1000.00;
+        let gameActive = false; 
+        let isFlying = false;   
+        let currentMult = 1.00;
+        let crashPoint = 0;
+        let betAmt = 0;
+        let loop;
+        let waitTime = 10;
+
+        const bots = ["CryptoWale", "ElonFan", "User777", "Jackpot", "Lucky", "Marmok", "Zero"];
+
+        function updateUI() {
+            document.getElementById('bal-val').textContent = balance.toFixed(2);
+            localStorage.setItem("casino_balance", balance.toFixed(2));
+
+            // Логика кнопки назад
+            if (gameActive || isFlying) {
+                backBtn.hide(); 
+                tg.enableClosingConfirmation();
+            } else {
+                backBtn.show(); 
+                tg.disableClosingConfirmation();
+            }
+        }
+
+        backBtn.onClick(() => {
+            if (!gameActive && !isFlying) {
+                window.location.href = 'index.html';
+            }
+        });
+
+        function generateBotBets() {
+            const cont = document.getElementById('betsCont');
+            cont.innerHTML = '';
+            bots.forEach(b => {
+                const amt = (Math.random() * 50 + 5).toFixed(2);
+                cont.innerHTML += `<div class="bet-row" id="bot-${b}"><span>👤 ${b}</span> <span>${amt} 💰</span></div>`;
+            });
+        }
+
+        function startWaitingTimer() {
+            waitTime = 10;
+            gameActive = false;
+            isFlying = false;
+            updateUI(); 
+
+            document.getElementById('multiplier').style.color = 'var(--text)';
+            document.getElementById('multiplier').textContent = "1.00x";
+            
+            const btn = document.getElementById('actionBtn');
+            btn.disabled = false;
+            btn.classList.remove('cashout');
+            btn.textContent = "ПОСТАВИТЬ";
+
+            generateBotBets();
+
+            const waitInterval = setInterval(() => {
+                document.getElementById('timer-display').textContent = `Взлет через ${waitTime}с`;
+                if (waitTime <= 0) {
+                    clearInterval(waitInterval);
+                    document.getElementById('timer-display').textContent = "";
+                    startRocket();
+                }
+                waitTime--;
+            }, 1000);
+        }
+
+        function handleBtn() {
+            if (isFlying) {
+                cashout();
+            } else {
+                betAmt = parseFloat(document.getElementById('betInp').value);
+                if (betAmt > balance || betAmt <= 0 || isNaN(betAmt)) return tg.showAlert("Ошибка ставки");
+                
+                balance -= betAmt;
+                gameActive = true; 
+                updateUI(); 
+                
+                const btn = document.getElementById('actionBtn');
+                btn.disabled = true;
+                btn.textContent = "СТАВКА ПРИНЯТА";
+            }
+        }
+
+        function startRocket() {
+            isFlying = true;
+            currentMult = 1.00;
+            
+            // Алгоритм казино
+            const rand = Math.random() * 100;
+            crashPoint = rand < 4 ? 1.00 : (96 / (100 - rand)).toFixed(2);
+            
+            const btn = document.getElementById('actionBtn');
+            const rocket = document.getElementById('rocket');
+            rocket.style.display = 'block';
+
+            if (gameActive) {
+                btn.disabled = false;
+                btn.classList.add('cashout');
+                btn.textContent = "ЗАБРАТЬ";
+            } else {
+                btn.disabled = true;
+                btn.textContent = "ИГРА ИДЕТ...";
+            }
+            updateUI();
+
+            loop = setInterval(() => {
+                currentMult += (currentMult * 0.008);
+                document.getElementById('multiplier').textContent = currentMult.toFixed(2) + "x";
+                
+                let move = (currentMult - 1) * 25;
+                rocket.style.transform = `translate(${move}px, -${move}px)`;
+
+                if (Math.random() > 0.97) {
+                    const bot = bots[Math.floor(Math.random()*bots.length)];
+                    const el = document.getElementById(`bot-${bot}`);
+                    if (el) el.classList.add('win');
+                }
+
+                if (currentMult >= crashPoint) {
+                    endGame();
+                }
+            }, 100);
+        }
+
+        function cashout() {
+            if (!gameActive) return;
+            const win = betAmt * currentMult;
+            balance += win;
+            gameActive = false; 
+            
+            const btn = document.getElementById('actionBtn');
+            btn.disabled = true;
+            btn.classList.remove('cashout');
+            btn.textContent = "ВЫ ПРИНЯЛИ: " + win.toFixed(2);
+            
+            tg.HapticFeedback.notificationOccurred('success');
+            updateUI(); 
+        }
+
+        function endGame() {
+            clearInterval(loop);
+            isFlying = false;
+            gameActive = false;
+            
+            document.getElementById('multiplier').style.color = 'var(--danger)';
+            document.getElementById('multiplier').textContent = "CRASH " + currentMult.toFixed(2) + "x";
+            
+            tg.HapticFeedback.notificationOccurred('error');
+
+            document.querySelectorAll('.bet-row').forEach(r => {
+                if(!r.classList.contains('win')) r.classList.add('loss');
+            });
+
+            setTimeout(() => {
+                document.getElementById('rocket').style.display = 'none';
+                document.getElementById('rocket').style.transform = 'none';
+                startWaitingTimer(); 
+            }, 3000);
+        }
+
+        // Запуск
+        window.onload = () => {
+            updateUI();
+            startWaitingTimer();
+        };
+    </script>
+</body>
+</html>

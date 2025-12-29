@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Wheel Game</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --bg: var(--tg-theme-bg-color, #0f0f14);
+            --sec-bg: var(--tg-theme-secondary-bg-color, #1b1f3a);
+            --text: var(--tg-theme-text-color, #ffffff);
+            --btn: var(--tg-theme-button-color, #5e8fff);
+            --btn-text: var(--tg-theme-button-text-color, #ffffff);
+        }
+
+        body {
+            font-family: -apple-system, sans-serif;
+            margin: 0; background-color: var(--bg); color: var(--text);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            min-height: 100vh; overflow: hidden;
+        }
+
+        .balance-card {
+            background-color: var(--sec-bg); padding: 10px 30px; border-radius: 12px;
+            margin-bottom: 30px; font-size: 24px; font-weight: 800;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+
+        .wheel-box {
+            position: relative; width: 85vw; max-width: 330px; aspect-ratio: 1 / 1;
+            display: flex; align-items: center; justify-content: center; margin-bottom: 40px;
+        }
+
+        .arrow {
+            position: absolute; top: -22px; left: 50%; transform: translateX(-50%);
+            width: 0; height: 0; border-left: 16px solid transparent;
+            border-right: 16px solid transparent; border-top: 32px solid var(--btn); z-index: 100;
+        }
+
+        #wheel {
+            width: 100%; height: 100%; border-radius: 50%; position: absolute;
+            transition: transform 8s cubic-bezier(0.1, 0, 0, 1);
+            background: conic-gradient(
+                var(--sec-bg) 0deg 45deg, rgba(255,255,255,0.05) 45deg 90deg,
+                var(--sec-bg) 90deg 135deg, rgba(255,255,255,0.1) 135deg 180deg,
+                var(--sec-bg) 180deg 225deg, #f8d448 225deg 270deg,
+                var(--sec-bg) 270deg 315deg, var(--btn) 315deg 360deg
+            );
+            border: 6px solid var(--sec-bg); box-sizing: border-box;
+        }
+
+        .number-container {
+            position: absolute; width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: flex-start;
+            padding-top: 15px; box-sizing: border-box; transform-origin: center center;
+        }
+        .number-container span { font-size: 18px; font-weight: 900; }
+        .gold-text { color: #000; }
+
+        .wheel-center {
+            position: absolute; width: 55px; height: 55px; background: var(--sec-bg);
+            border: 4px solid var(--btn); border-radius: 50%; z-index: 50;
+            display: flex; align-items: center; justify-content: center; font-size: 22px;
+        }
+
+        .spin-btn {
+            width: 280px; padding: 18px; font-size: 20px; font-weight: 800;
+            border-radius: 16px; border: none; background-color: var(--btn);
+            color: var(--btn-text); text-transform: uppercase; cursor: pointer;
+        }
+        .spin-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+
+    <div class="balance-card">
+        <span id="balance">0.00</span> 💰
+    </div>
+
+    <div class="wheel-box">
+        <div class="arrow"></div>
+        <div class="wheel-center">💎</div>
+        <div id="wheel">
+            <div class="number-container" style="transform: rotate(22.5deg)"><span>0.05$</span></div>
+            <div class="number-container" style="transform: rotate(67.5deg)"><span>2$</span></div>
+            <div class="number-container" style="transform: rotate(112.5deg)"><span>0.05$</span></div>
+            <div class="number-container" style="transform: rotate(157.5deg)"><span>5$</span></div>
+            <div class="number-container" style="transform: rotate(202.5deg)"><span>0.05$</span></div>
+            <div class="number-container gold-text" style="transform: rotate(247.5deg)"><span>🌟 25$</span></div>
+            <div class="number-container" style="transform: rotate(292.5deg)"><span>0.05$</span></div>
+            <div class="number-container" style="transform: rotate(337.5deg)"><span>🔥 10$</span></div>
+        </div>
+    </div>
+
+    <button class="spin-btn" id="spinBtn" onclick="spin()">Крутить 1$</button>
+
+    <script>
+        // 1. ИНИЦИАЛИЗАЦИЯ TELEGRAM И КНОПКИ НАЗАД
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+
+        const backButton = tg.BackButton;
+        backButton.show(); // Показываем стрелочку вверху
+
+        backButton.onClick(function() {
+            // Ведет в главное меню (файл index.html)
+            window.location.href = 'index.html'; 
+        });
+
+        // 2. ДАННЫЕ ИГРОКА
+        let balance = parseFloat(localStorage.getItem("casino_balance")) || 1000;
+        let sessionProfit = parseFloat(localStorage.getItem("session_profit")) || 0;
+        let rotation = 0;
+
+        function updateUI() {
+            document.getElementById('balance').textContent = balance.toFixed(2);
+            localStorage.setItem("casino_balance", balance);
+            localStorage.setItem("session_profit", sessionProfit);
+        }
+        updateUI();
+
+        // 3. ЛОГИКА ВРАЩЕНИЯ
+        function spin() {
+            if (balance < 1) return;
+
+            // Блокируем интерфейс и кнопку назад на время игры
+            const btn = document.getElementById('spinBtn');
+            btn.disabled = true;
+            backButton.hide(); 
+            
+            balance -= 1;
+            sessionProfit -= 1;
+            updateUI();
+            
+            tg.HapticFeedback.impactOccurred('medium');
+
+            let result;
+            const rand = Math.random() * 100;
+
+            // АЛГОРИТМ ВЕРОЯТНОСТЕЙ
+            if (sessionProfit > 10) {
+                // РЕЖИМ СЛИВА (если игрок в плюсе)
+                const baitAngles = [202.5, 292.5, 22.5]; 
+                result = { win: 0.05, angle: baitAngles[Math.floor(Math.random() * baitAngles.length)], isNearMiss: true };
+            } else {
+                // ОБЫЧНЫЙ РЕЖИМ
+                if (rand < 77.5) { 
+                    const angles = [22.5, 112.5, 202.5, 292.5];
+                    result = { win: 0.05, angle: angles[Math.floor(Math.random() * angles.length)], isNearMiss: Math.random() > 0.3 };
+                } else if (rand < 95.5) { // 18% шанс на 2$
+                    result = { win: 2, angle: 67.5 };
+                } else if (rand < 98) { // 2.5% шанс на 5$
+                    result = { win: 5, angle: 157.5 };
+                } else if (rand < 99.4) { // 1.4% шанс на 10$
+                    result = { win: 10, angle: 337.5 };
+                } else { // 0.6% шанс на 25$
+                    result = { win: 25, angle: 247.5 };
+                }
+            }
+
+            // ЭФФЕКТ NEAR MISS (Остановка на волоске)
+            let finalOffset = (Math.random() * 6 - 3); 
+            if (result.win === 0.05 && result.isNearMiss) {
+                if (result.angle === 202.5) finalOffset = 21.9; // Почти доехал до 25$
+                if (result.angle === 292.5) finalOffset = -21.9; // Чуть переехал 25$
+                if (result.angle === 22.5) finalOffset = -21.9; // Чуть переехал 10$
+            }
+
+            const spins = 13 * 360; 
+            const finalAngle = 360 - result.angle + finalOffset;
+            rotation += spins + (finalAngle - (rotation % 360));
+            
+            document.getElementById('wheel').style.transform = `rotate(${rotation}deg)`;
+
+            // ЗАВЕРШЕНИЕ
+            setTimeout(() => {
+                btn.disabled = false;
+                backButton.show(); // Возвращаем кнопку выхода
+                
+                balance += result.win;
+                sessionProfit += result.win;
+                updateUI();
+                
+                tg.HapticFeedback.notificationOccurred(result.win >= 1 ? 'success' : 'warning');
+            }, 8100);
+        }
+    </script>
+</body>
+</html>

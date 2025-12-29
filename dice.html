@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Dice Pro - Monolith Edition</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --bg: var(--tg-theme-bg-color, #0f0f14);
+            --sec-bg: var(--tg-theme-secondary-bg-color, #1b1f3a);
+            --text: var(--tg-theme-text-color, #ffffff);
+            --btn: var(--tg-theme-button-color, #5e8fff);
+            --dice-white: #ffffff;
+            --hint: var(--tg-theme-hint-color, #708499);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            margin: 0; background-color: var(--bg); color: var(--text);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            min-height: 100vh; overflow-x: hidden;
+            touch-action: manipulation;
+        }
+
+        .balance-card {
+            background: var(--sec-bg); padding: 12px 30px; border-radius: 20px;
+            font-size: 24px; font-weight: 900; margin-top: 20px; margin-bottom: 50px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.08);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .scene { width: 100px; height: 100px; perspective: 1200px; }
+        
+        .dice {
+            width: 100%; height: 100%; position: relative;
+            transform-style: preserve-3d;
+            transform: rotateX(-20deg) rotateY(20deg);
+            transition: transform 2.2s cubic-bezier(0.2, 0.9, 0.3, 1.02);
+            will-change: transform;
+        }
+
+        .face {
+            position: absolute; width: 100px; height: 100px;
+            background: var(--dice-white);
+            display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr);
+            padding: 12px; box-sizing: border-box;
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.15);
+        }
+
+        .dot { 
+            width: 18px; height: 18px; background: #111; border-radius: 50%; 
+            align-self: center; justify-self: center;
+            transform: translateZ(2px);
+        }
+        .face-1 .dot { background: #e63946; width: 28px; height: 28px; }
+
+        .face-1 { transform: rotateY(0deg) translateZ(50.5px); display: flex; justify-content: center; align-items: center; }
+        .face-2 { transform: rotateY(180deg) translateZ(50.5px); }
+        .face-3 { transform: rotateY(90deg) translateZ(50.5px); }
+        .face-4 { transform: rotateY(-90deg) translateZ(50.5px); }
+        .face-5 { transform: rotateX(90deg) translateZ(50.5px); }
+        .face-6 { transform: rotateX(-90deg) translateZ(50.5px); }
+
+        .face-2 .dot:nth-child(1) { grid-area: 1 / 1; } .face-2 .dot:nth-child(2) { grid-area: 3 / 3; }
+        .face-3 .dot:nth-child(1) { grid-area: 1 / 1; } .face-3 .dot:nth-child(2) { grid-area: 2 / 2; } .face-3 .dot:nth-child(3) { grid-area: 3 / 3; }
+        .face-4 .dot:nth-child(1) { grid-area: 1 / 1; } .face-4 .dot:nth-child(2) { grid-area: 1 / 3; } .face-4 .dot:nth-child(3) { grid-area: 3 / 1; } .face-4 .dot:nth-child(4) { grid-area: 3 / 3; }
+        .face-5 .dot:nth-child(1) { grid-area: 1 / 1; } .face-5 .dot:nth-child(2) { grid-area: 1 / 3; } .face-5 .dot:nth-child(3) { grid-area: 2 / 2; } .face-5 .dot:nth-child(4) { grid-area: 3 / 1; } .face-5 .dot:nth-child(5) { grid-area: 3 / 3; }
+        .face-6 .dot:nth-child(1) { grid-area: 1 / 1; } .face-6 .dot:nth-child(2) { grid-area: 1 / 3; } .face-6 .dot:nth-child(3) { grid-area: 2 / 1; } .face-6 .dot:nth-child(4) { grid-area: 2 / 3; } .face-6 .dot:nth-child(5) { grid-area: 3 / 1; } .face-6 .dot:nth-child(6) { grid-area: 3 / 3; }
+
+        .controls { margin-top: 50px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+        .label { font-size: 12px; color: var(--hint); text-transform: uppercase; font-weight: bold; letter-spacing: 1px; }
+        input {
+            background: var(--sec-bg); border: 2px solid var(--btn); color: white;
+            padding: 15px; border-radius: 16px; text-align: center; font-size: 24px; width: 150px; outline: none;
+        }
+        .play-btn {
+            width: 280px; padding: 20px; font-size: 18px; font-weight: bold;
+            border-radius: 18px; border: none; background: var(--btn); color: white;
+            text-transform: uppercase; cursor: pointer; transition: 0.2s;
+        }
+        .play-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        .rules-card {
+            width: 85%; max-width: 320px; background: var(--sec-bg); 
+            border-radius: 20px; padding: 20px; margin-top: 30px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .rules-card h3 { margin: 0 0 12px 0; font-size: 16px; text-align: center; color: var(--btn); text-transform: uppercase; }
+        .rule-row { display: flex; align-items: center; gap: 15px; margin-bottom: 8px; font-size: 14px; }
+        .rule-icon { width: 20px; text-align: center; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="balance-card"><span id="bal-val">0.00</span> 💰</div>
+
+    <div class="scene">
+        <div class="dice" id="dice">
+            <div class="face face-1"><div class="dot"></div></div>
+            <div class="face face-2"><div class="dot"></div><div class="dot"></div></div>
+            <div class="face face-3"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+            <div class="face face-4"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+            <div class="face face-5"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+            <div class="face face-6"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <span class="label">Размер ставки</span>
+        <input type="number" id="betInp" value="10.00" min="0.1" step="0.1" inputmode="decimal">
+        <button class="play-btn" id="rollBtn" onclick="roll()">Бросить кубик</button>
+    </div>
+
+    <div class="rules-card">
+        <h3>Как играть</h3>
+        <div class="rule-row"><span class="rule-icon" style="color:#e63946">●</span><span><b>Грань 1:</b> Победа! Выплата <b>x2</b></span></div>
+        <div class="rule-row"><span class="rule-icon">⚁</span><span><b>Грани 2-5:</b> Ничья. Возврат ставки</span></div>
+        <div class="rule-row"><span class="rule-icon" style="color:var(--hint)">⚅</span><span><b>Грань 6:</b> Проигрыш. Минус ставка</span></div>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        tg.BackButton.show();
+        tg.BackButton.onClick(() => window.location.href = 'index.html');
+
+        let balance = parseFloat(localStorage.getItem("casino_balance")) || 1000.00;
+        let sessionProfit = parseFloat(localStorage.getItem("session_profit")) || 0.00;
+        let rotX = -20; let rotY = 20;
+
+        function updateUI() {
+            document.getElementById('bal-val').textContent = balance.toFixed(2);
+            localStorage.setItem("casino_balance", balance.toFixed(2));
+            localStorage.setItem("session_profit", sessionProfit.toFixed(2));
+        }
+        updateUI();
+
+        function roll() {
+            const bet = parseFloat(document.getElementById('betInp').value);
+            if (isNaN(bet) || bet > balance || bet <= 0) {
+                tg.showAlert("Некорректная ставка!");
+                return;
+            }
+
+            const btn = document.getElementById('rollBtn');
+            btn.disabled = true;
+            tg.BackButton.hide();
+
+            balance -= bet;
+            sessionProfit -= bet;
+            updateUI();
+            tg.HapticFeedback.impactOccurred('heavy');
+
+            let res;
+            const r = Math.random() * 100;
+            
+            // АЛГОРИТМ ШАНСОВ
+            if (sessionProfit > 20.00) { 
+                if (r < 6) res = 1;         // 6% победа
+                else if (r < 75) res = 6;    // 69% проигрыш
+                else res = Math.floor(Math.random()*4)+2;
+            } else {
+                if (r < 12) res = 1;        // 12% победа
+                else if (r < 50) res = 6;    // 38% проигрыш
+                else res = Math.floor(Math.random()*4)+2;
+            }
+
+            const faceAngles = {
+                1: { x: 0, y: 0 }, 2: { x: 0, y: 180 }, 3: { x: 0, y: -90 },
+                4: { x: 0, y: 90 }, 5: { x: -90, y: 0 }, 6: { x: 90, y: 0 }
+            };
+
+            rotX += 1440 + faceAngles[res].x - (rotX % 360);
+            rotY += 1080 + faceAngles[res].y - (rotY % 360);
+
+            document.getElementById('dice').style.transform = `rotateX(${rotX}deg) rotateY(${rotY}deg)`;
+
+            setTimeout(() => {
+                btn.disabled = false;
+                tg.BackButton.show();
+                
+                if (res === 1) { 
+                    balance += bet * 2; 
+                    sessionProfit += bet; 
+                    tg.HapticFeedback.notificationOccurred('success'); 
+                } else if (res >= 2 && res <= 5) { 
+                    balance += bet; 
+                    sessionProfit += bet; // Возвращаем в профит сессии то, что забрали в начале функции
+                    tg.HapticFeedback.notificationOccurred('warning'); 
+                } else { 
+                    tg.HapticFeedback.notificationOccurred('error'); 
+                }
+                updateUI();
+            }, 2300);
+        }
+    </script>
+</body>
+</html>
