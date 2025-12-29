@@ -12,57 +12,112 @@
             --text: var(--tg-theme-text-color, #ffffff);
             --btn: var(--tg-theme-button-color, #5e8fff);
         }
+
         body {
-            font-family: -apple-system, sans-serif; margin: 0; padding: 0;
-            background-color: var(--bg); color: var(--text); user-select: none;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            margin: 0; padding: 0;
+            background-color: var(--bg); color: var(--text);
+            overflow: hidden; user-select: none;
         }
+
         .container { padding: 20px; text-align: center; }
-        .profile { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 25px; }
-        .profile img { width: 55px; height: 55px; border-radius: 50%; border: 2px solid var(--btn); }
-        
+
+        .profile {
+            display: flex; align-items: center; justify-content: center;
+            gap: 12px; margin-bottom: 25px;
+        }
+
+        .profile img {
+            width: 55px; height: 55px; border-radius: 50%;
+            border: 2px solid var(--btn); object-fit: cover;
+        }
+
+        .profile-name { font-weight: bold; font-size: 20px; }
+
         .balance {
             background: var(--sec-bg); padding: 15px; border-radius: 15px;
             display: flex; align-items: center; justify-content: center;
-            gap: 15px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); cursor: pointer;
+            gap: 15px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            cursor: pointer;
         }
-        .balance span { font-size: 22px; font-weight: 800; color: #2ecc71; }
+
+        .balance span {
+            font-size: 22px; font-weight: 800;
+            font-variant-numeric: tabular-nums;
+        }
 
         .raffle-btn {
             width: 100%; padding: 18px; font-size: 16px; font-weight: bold;
-            border-radius: 15px; border: none; background: linear-gradient(45deg, #28a745, #2ecc71);
-            color: white; margin-bottom: 20px;
+            border-radius: 15px; border: none;
+            background: linear-gradient(45deg, #28a745, #2ecc71);
+            color: white; margin-bottom: 20px; cursor: pointer;
         }
 
-        .games { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
+        .games {
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;
+        }
+
         .game-btn {
             background-color: var(--sec-bg); border-radius: 20px;
             padding: 25px; font-size: 45px; border: 1px solid rgba(255,255,255,0.05);
-            cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 10px;
+            cursor: pointer; transition: transform 0.1s;
+            display: flex; flex-direction: column; align-items: center; gap: 10px;
         }
-        .game-btn span { font-size: 14px; font-weight: bold; text-transform: uppercase; opacity: 0.8; }
 
-        /* КОШЕЛЕК */
+        .game-btn span {
+            font-size: 14px; font-weight: bold; text-transform: uppercase;
+            color: var(--text); opacity: 0.8;
+        }
+
+        .game-btn:active, .raffle-btn:active { transform: scale(0.95); }
+        
+        /* СТИЛИ КОШЕЛЬКА */
         .modal {
             display: none; position: fixed; bottom: 0; left: 0; width: 100%;
             background: var(--sec-bg); border-radius: 25px 25px 0 0;
             padding: 25px; box-sizing: border-box; z-index: 100;
-            box-shadow: 0 -5px 20px rgba(0,0,0,0.5); animation: slideUp 0.3s;
+            box-shadow: 0 -5px 20px rgba(0,0,0,0.5);
+            animation: slideUp 0.3s ease-out;
         }
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
         
-        input {
-            width: 100%; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 12px; padding: 15px; color: white; margin: 15px 0; box-sizing: border-box;
+        .amount-input-container {
+            margin-top: 15px;
+            text-align: left;
         }
-        .wallet-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-        .w-btn { padding: 15px; border-radius: 15px; border: none; font-weight: bold; color: white; }
+
+        .amount-input-container label {
+            font-size: 12px;
+            opacity: 0.6;
+            margin-left: 5px;
+        }
+
+        .amount-input-container input {
+            width: 100%;
+            background: rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 12px;
+            color: white;
+            font-size: 16px;
+            margin-top: 5px;
+            box-sizing: border-box;
+            outline: none;
+        }
+
+        .wallet-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
+        .w-btn {
+            padding: 15px; border-radius: 15px; border: none; font-weight: bold;
+            color: white; cursor: pointer; font-size: 14px;
+        }
+        .deposit { background: #28a745; }
+        .withdraw { background: var(--btn); }
     </style>
 </head>
 <body>
-
 <div class="container">
     <div class="profile">
-        <img id="user-photo" src="https://via.placeholder.com/50">
+        <img id="user-photo" src="https://via.placeholder.com/50" alt="Avatar">
         <div id="user-name" class="profile-name">Игрок</div>
     </div>
 
@@ -73,79 +128,115 @@
     <button class="raffle-btn" onclick="takeBonus()">🎁 ЕЖЕДНЕВНЫЙ БОНУС</button>
 
     <div class="games">
-        <div class="game-btn" onclick="tg.showAlert('Игра Mines скоро!')">💣 <span>Mines</span></div>
-        <div class="game-btn" onclick="tg.showAlert('Игра Dice скоро!')">🎲 <span>Dice</span></div>
-        <div class="game-btn" onclick="tg.showAlert('Игра Wheel скоро!')">🎡 <span>Wheel</span></div>
-        <div class="game-btn" onclick="tg.showAlert('Игра Crash скоро!')">💥 <span>Crash</span></div>
+        <div class="game-btn" onclick="window.location.href='mines.html'">
+            💣 <span>Mines</span>
+        </div>
+        <div class="game-btn" onclick="window.location.href='dice.html'">
+            🎲 <span>Dice</span>
+        </div>
+        <div class="game-btn" onclick="window.location.href='wheel.html'">
+            🎡 <span>Wheel</span>
+        </div>
+        <div class="game-btn" onclick="window.location.href='crash.html'">
+            💥 <span>Crash</span>
+        </div>
     </div>
 </div>
 
 <div id="walletModal" class="modal">
     <div style="display:flex; justify-content:space-between; align-items:center;">
-        <h3 style="margin:0;">Кошелек USDT</h3>
+        <h3 style="margin:0;">Кошелек</h3>
         <span onclick="closeWallet()" style="cursor:pointer; font-size:24px;">✕</span>
     </div>
-    <input type="number" id="wallet-amount" value="5" min="1">
+    
+    <p style="text-align:left; opacity:0.7; margin: 15px 0 5px;">Баланс: <span id="modal-bal">0.00</span> USDT</p>
+    
+    <div class="amount-input-container">
+        <label>Сумма пополнения (мин. 5$):</label>
+        <input type="number" id="deposit-amount" value="5" min="5">
+    </div>
+
     <div class="wallet-grid">
-        <button class="w-btn" style="background:#28a745;" onclick="startDeposit()">ПОПОЛНИТЬ</button>
-        <button class="w-btn" style="background:var(--btn);" onclick="startWithdraw()">ВЫВЕСТИ</button>
+        <button class="w-btn deposit" onclick="startDeposit()">ПОПОЛНИТЬ</button>
+        <button class="w-btn withdraw" onclick="tg.showAlert('Вывод будет доступен скоро!')">ВЫВЕСТИ</button>
     </div>
 </div>
 
 <script>
     const tg = window.Telegram.WebApp;
-    const NGROK_URL = 'https://petrificant-phung-elliptically.ngrok-free.dev';
-    const userId = tg.initDataUnsafe?.user?.id || 12345;
+    tg.ready();
+    tg.expand();
 
-    tg.ready(); tg.expand();
-
-    if (tg.initDataUnsafe?.user) {
-        document.getElementById('user-name').textContent = tg.initDataUnsafe.user.first_name;
-        if (tg.initDataUnsafe.user.photo_url) document.getElementById('user-photo').src = tg.initDataUnsafe.user.photo_url;
+    if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+        const user = tg.initDataUnsafe.user;
+        document.getElementById('user-name').textContent = user.first_name;
+        if (user.photo_url) document.getElementById('user-photo').src = user.photo_url;
     }
 
-    async function updateBalance() {
-        try {
-            const res = await fetch(`${NGROK_URL}/get-balance/${userId}`);
-            const data = await res.json();
-            document.getElementById('balance-val').textContent = data.balance.toFixed(2);
-        } catch (e) { console.error("Ошибка БД"); }
+    function updateBalanceDisplay() {
+        let bal = localStorage.getItem("casino_balance") || "0.00";
+        document.getElementById('balance-val').textContent = parseFloat(bal).toFixed(2);
     }
 
-    function openWallet() { document.getElementById('walletModal').style.display = 'block'; }
-    function closeWallet() { document.getElementById('walletModal').style.display = 'none'; }
+    function openWallet() {
+        document.getElementById('walletModal').style.display = 'block';
+        document.getElementById('modal-bal').textContent = document.getElementById('balance-val').textContent;
+    }
+
+    function closeWallet() {
+        document.getElementById('walletModal').style.display = 'none';
+    }
 
     async function startDeposit() {
-        const amount = document.getElementById('wallet-amount').value;
-        const res = await fetch(`${NGROK_URL}/create-deposit`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amount, tgId: userId })
-        });
-        const data = await res.json();
-        if (data.pay_url) tg.openTelegramLink(data.pay_url);
-    }
+        const amount = document.getElementById('deposit-amount').value;
+        
+        if (amount < 5) {
+            tg.showAlert("Минимальная сумма пополнения — 5 USDT");
+            return;
+        }
 
-    async function startWithdraw() {
-        const amount = document.getElementById('wallet-amount').value;
-        const res = await fetch(`${NGROK_URL}/withdraw`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amount, tgId: userId })
-        });
-        const data = await res.json();
-        if (data.success) {
-            tg.showAlert("✅ Выплата отправлена!");
-            updateBalance();
-        } else { tg.showAlert("Ошибка: " + data.error); }
+        tg.MainButton.setText(`ОПЛАТИТЬ ${amount} USDT`).show();
+        
+        try {
+            const NGROK_URL = 'https://petrificant-phung-elliptically.ngrok-free.dev'; 
+            
+            const response = await fetch(`${NGROK_URL}/create-deposit`, { 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ amount: amount })
+            });
+            
+            const data = await response.json();
+            
+            if (data.pay_url) {
+                // Открываем шторкой внутри Mini App
+                tg.openTelegramLink(data.pay_url);
+            }
+        } catch (e) {
+            tg.showAlert("Сервер на ПК не отвечает!");
+        } finally {
+            tg.MainButton.hide();
+        }
     }
 
     function takeBonus() {
-        tg.showAlert("Бонус зачислен (тестово)");
-        // Здесь можно добавить fetch к серверу для начисления бонуса в базу
+        const lastBonus = localStorage.getItem('last_bonus');
+        const now = new Date().getTime();
+        if (lastBonus && now - lastBonus < 86400000) {
+            tg.showAlert("Бонус можно брать раз в 24 часа!");
+            return;
+        }
+        let currentBal = parseFloat(localStorage.getItem("casino_balance") || 0);
+        currentBal += 50.00;
+        localStorage.setItem("casino_balance", currentBal.toFixed(2));
+        localStorage.setItem('last_bonus', now);
+        updateBalanceDisplay();
+        tg.HapticFeedback.notificationOccurred('success');
+        tg.showAlert("Вы получили 50.00 💰");
     }
 
-    updateBalance();
+    window.onload = updateBalanceDisplay;
+    window.addEventListener('pageshow', updateBalanceDisplay);
 </script>
 </body>
 </html>
